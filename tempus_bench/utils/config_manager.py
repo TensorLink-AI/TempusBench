@@ -23,7 +23,6 @@ from .configs import (
     convert_pydantic_errors,
 )
 from .log_manager import LogManager
-from .r2_client import R2StorageClient
 from .paths import (
     get_project_root,
     get_models_dir,
@@ -136,21 +135,6 @@ class ConfigManager:
             f"Initializing run at {run_timestamp}; logs at: {self.logs_path}",
             is_verbose=True,
         )
-
-        # Initialize R2 storage client
-        self.r2_client = R2StorageClient(
-            enabled=self.evaluation_setting.r2_enabled,
-            bucket=self.evaluation_setting.r2_bucket,
-            endpoint_url=self.evaluation_setting.r2_endpoint_url,
-            access_key_id=self.evaluation_setting.r2_access_key_id,
-            secret_access_key=self.evaluation_setting.r2_secret_access_key,
-            prefix=self.evaluation_setting.r2_prefix,
-        )
-        if self.r2_client.enabled:
-            self.logger.info(
-                "ConfigManager",
-                f"R2 storage streaming enabled: bucket={self.evaluation_setting.r2_bucket}",
-            )
 
         self.model_configs = self.init_models_config(config_data["model"])
         self.model_settings = self.init_model_setting()
@@ -280,7 +264,6 @@ class ConfigManager:
                     model_setting=self.model_settings[model_name],
                     task_config=task_config,
                     run_path=str(self.run_path),
-                    r2_client=self.r2_client,
                 )
 
     @staticmethod

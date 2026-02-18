@@ -119,10 +119,7 @@ class BenchmarkRunner:
         csv_path = evals_dir / "evaluations.csv"
         if csv_path.exists():
             pivot_tables = ResultsGenerator.create_pivot_tables(str(csv_path))
-            generator = ResultsGenerator(
-                pivot_tables=pivot_tables,
-                r2_client=self.manager.r2_client,
-            )
+            generator = ResultsGenerator(pivot_tables=pivot_tables)
             generator.save_pivot_tables(str(evals_dir))
             generator.save_aggregations(str(evals_dir))
             self.logger.success(

@@ -1,0 +1,9 @@
+# Cloudflare R2 credentials for uploading/downloading benchmark task datasets.
+# Used by: python scripts/r2_sync.py
+# Can also be set via env vars: R2_BUCKET, R2_ENDPOINT_URL, R2_ACCESS_KEY_ID,
+# R2_SECRET_ACCESS_KEY, R2_PREFIX
+r2_bucket: ""
+r2_endpoint_url: ""
+r2_access_key_id: ""
+r2_secret_access_key: ""
+r2_prefix: "tempusbench"

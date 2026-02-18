@@ -197,7 +197,7 @@ class EvaluationSetting(BaseModel):
     System-wide evaluation settings configuration.
 
     This class defines global settings for logging, TensorBoard, conda
-    environment management, and R2 cloud storage across all models and tasks.
+    environment management across all models and tasks.
 
     Attributes:
         file_logging (bool): Enable file logging.
@@ -207,12 +207,6 @@ class EvaluationSetting(BaseModel):
         tensorboard_logging (bool): Enable TensorBoard logging.
         conda_env_prefix (str): Prefix for conda environment names.
         reinstall_conda (bool): Whether to reinstall conda environments for each model.
-        r2_enabled (bool): Enable R2 cloud storage streaming.
-        r2_bucket (str): R2 bucket name.
-        r2_endpoint_url (str): R2 S3-compatible endpoint URL.
-        r2_access_key_id (str): R2 access key ID (or use env var R2_ACCESS_KEY_ID).
-        r2_secret_access_key (str): R2 secret access key (or use env var R2_SECRET_ACCESS_KEY).
-        r2_prefix (str): Key prefix for all uploaded objects in the bucket.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -233,29 +227,6 @@ class EvaluationSetting(BaseModel):
     )
     verbose: bool = Field(default=False, description="Whether to print verbose output")
 
-    # R2 Cloud Storage settings
-    r2_enabled: bool = Field(
-        default=False, description="Enable R2 cloud storage streaming"
-    )
-    r2_bucket: str = Field(
-        default="", description="R2 bucket name"
-    )
-    r2_endpoint_url: str = Field(
-        default="", description="R2 S3-compatible endpoint URL"
-    )
-    r2_access_key_id: str = Field(
-        default="",
-        description="R2 access key ID (or set R2_ACCESS_KEY_ID env var)",
-    )
-    r2_secret_access_key: str = Field(
-        default="",
-        description="R2 secret access key (or set R2_SECRET_ACCESS_KEY env var)",
-    )
-    r2_prefix: str = Field(
-        default="tempusbench",
-        description="Key prefix for all uploaded objects in the R2 bucket",
-    )
-
 
 class JobConfig:
     """
@@ -273,7 +244,6 @@ class JobConfig:
             device, conda environment).
         task_config (TaskConfig): Task-specific configuration including dataset settings.
         run_path (str): Path to run directory for outputs.
-        r2_client: Optional R2StorageClient for streaming results to R2.
     """
 
     def __init__(
@@ -284,7 +254,6 @@ class JobConfig:
         model_setting: Dict[str, Any],
         task_config: TaskConfig,
         run_path: str,
-        r2_client: Optional[Any] = None,
     ):
         """
         Initialize job configuration with all components.
@@ -296,7 +265,6 @@ class JobConfig:
             model_setting (Dict[str, Any]): Model execution settings.
             task_config (TaskConfig): Task-specific configuration.
             run_path (str): Path to run directory for outputs.
-            r2_client: Optional R2StorageClient for streaming results to cloud storage.
         """
 
         self.evaluation_config = evaluation_config
@@ -305,7 +273,6 @@ class JobConfig:
         self.model_setting = model_setting
         self.task_config = task_config
         self.run_path = run_path
-        self.r2_client = r2_client
 
     def to_dict(self) -> Dict[str, Any]:
         """

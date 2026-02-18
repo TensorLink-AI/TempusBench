@@ -1,25 +1,25 @@
 #!/usr/bin/env python3
 """
-Upload TempusBench benchmark results to Cloudflare R2.
+Upload/download TempusBench task datasets to/from Cloudflare R2.
 
-Finds the evals/ directory from a run and uploads only the benchmark data
-(evaluations.csv, pivot tables, aggregation CSVs) to R2 with a flat structure.
+Syncs the benchmark's task data (the time-series CSVs and task.yaml configs)
+so they can be distributed and consumed from R2.
 
 Usage:
-    # Upload evals from the latest run
+    # Upload all tasks
     python scripts/r2_sync.py upload
 
-    # Upload evals from a specific run
-    python scripts/r2_sync.py upload runs/run_20240101-120000
+    # Upload only multivariate tasks
+    python scripts/r2_sync.py upload --filter multivariate
 
-    # Upload a specific evaluations CSV
-    python scripts/r2_sync.py upload runs/run_20240101-120000/evals/evaluations.csv
+    # Upload a single task
+    python scripts/r2_sync.py upload --filter univariate/absent_binary_univariate
 
     # List what's in the bucket
     python scripts/r2_sync.py list
 
-    # Download benchmark data from R2
-    python scripts/r2_sync.py download ./output/
+    # Download tasks from R2
+    python scripts/r2_sync.py download ./local_tasks/
 
 Environment variables (override settings.yaml):
     R2_BUCKET             - Bucket name
@@ -40,20 +40,23 @@ sys.path.insert(0, str(project_root))
 from tempus_bench.utils.r2_client import R2StorageClient
 
 
-def load_settings_yaml():
-    """Load R2 settings from settings.yaml if it exists."""
+TASKS_DIR = project_root / "tempus_bench" / "tasks"
+
+
+def load_r2_config():
+    """Load R2 credentials from r2.yaml if it exists."""
     import yaml
 
-    settings_path = project_root / "tempus_bench" / "config" / "settings.yaml"
-    if not settings_path.exists():
+    r2_path = project_root / "tempus_bench" / "config" / "r2.yaml"
+    if not r2_path.exists():
         return {}
-    with open(settings_path, "r") as f:
+    with open(r2_path, "r") as f:
         return yaml.safe_load(f) or {}
 
 
 def create_client(args) -> R2StorageClient:
     """Create an R2StorageClient from CLI args, env vars, or settings.yaml."""
-    settings = load_settings_yaml()
+    settings = load_r2_config()
 
     client = R2StorageClient(
         enabled=True,
@@ -75,125 +78,112 @@ def create_client(args) -> R2StorageClient:
     return client
 
 
-def find_latest_run() -> Path:
-    """Find the most recent run directory under runs/."""
-    runs_dir = project_root / "runs"
-    if not runs_dir.is_dir():
-        print("Error: No runs/ directory found")
+def collect_task_files(filter_path: str = "") -> list:
+    """
+    Collect all task files (CSVs + task.yaml) under the tasks directory.
+
+    Args:
+        filter_path: Optional sub-path filter, e.g. "multivariate" or
+                     "univariate/absent_binary_univariate"
+
+    Returns:
+        List of (local_path, r2_key) tuples. R2 keys mirror the directory
+        structure: tasks/univariate/task_name/file.csv
+    """
+    search_dir = TASKS_DIR / filter_path if filter_path else TASKS_DIR
+    if not search_dir.exists():
+        print(f"Error: {search_dir} does not exist")
         sys.exit(1)
 
-    run_dirs = sorted(
-        [d for d in runs_dir.iterdir() if d.is_dir() and d.name.startswith("run_")],
-        reverse=True,
-    )
-    if not run_dirs:
-        print("Error: No run directories found in runs/")
-        sys.exit(1)
+    files = []
+    for path in sorted(search_dir.rglob("*")):
+        if not path.is_file():
+            continue
+        # Only upload CSVs and YAML configs
+        if path.suffix not in (".csv", ".yaml", ".yml"):
+            continue
+        r2_key = f"tasks/{path.relative_to(TASKS_DIR)}"
+        files.append((path, r2_key))
 
-    return run_dirs[0]
-
-
-def find_evals_csvs(evals_dir: Path) -> list:
-    """Return all CSV files in an evals directory."""
-    return sorted(evals_dir.glob("*.csv"))
+    return files
 
 
 def cmd_upload(args):
-    """Upload benchmark evals data to R2."""
+    """Upload task datasets to R2."""
     client = create_client(args)
+    files = collect_task_files(args.filter)
 
-    if args.path:
-        local_path = Path(args.path).resolve()
-    else:
-        # Default: latest run
-        local_path = find_latest_run()
-        print(f"Using latest run: {local_path.name}")
-
-    if not local_path.exists():
-        print(f"Error: {local_path} does not exist")
+    if not files:
+        print("No task files found to upload")
         sys.exit(1)
 
-    # Figure out where the CSVs are
-    if local_path.is_file() and local_path.suffix == ".csv":
-        # Single CSV file
-        csvs = [local_path]
-    elif local_path.is_dir():
-        evals_dir = local_path / "evals" if (local_path / "evals").is_dir() else local_path
-        csvs = find_evals_csvs(evals_dir)
-    else:
-        print(f"Error: {local_path} is not a CSV file or directory")
-        sys.exit(1)
-
-    if not csvs:
-        print("No CSV files found to upload")
-        sys.exit(1)
-
-    print(f"Uploading {len(csvs)} file(s) to R2 (prefix: {client.prefix}):\n")
+    print(f"Uploading {len(files)} task file(s) to R2 (prefix: {client.prefix}):\n")
     uploaded = 0
-    for csv_path in csvs:
-        r2_key = csv_path.name
-        ok = client.upload_file(str(csv_path), r2_key)
+    for local_path, r2_key in files:
+        ok = client.upload_file(str(local_path), r2_key)
         status = "ok" if ok else "FAILED"
-        print(f"  {csv_path.name} -> {client._make_key(r2_key)}  [{status}]")
+        print(f"  {r2_key}  [{status}]")
         if ok:
             uploaded += 1
 
-    print(f"\n{uploaded}/{len(csvs)} files uploaded")
+    print(f"\n{uploaded}/{len(files)} files uploaded")
 
 
 def cmd_download(args):
-    """Download benchmark data from R2 to local disk."""
+    """Download task datasets from R2 to local disk."""
     client = create_client(args)
     local_dir = Path(args.local_dir).resolve()
 
-    keys = client.list_objects("")
+    keys = client.list_objects("tasks/")
     if not keys:
-        print("No objects found in R2")
-        return
-
-    # Filter to only CSV files
-    csv_keys = [k for k in keys if k.endswith(".csv")]
-    if not csv_keys:
-        print("No CSV files found in R2")
+        print("No task data found in R2")
         return
 
     local_dir.mkdir(parents=True, exist_ok=True)
-    print(f"Downloading {len(csv_keys)} file(s) to {local_dir}/:\n")
+    print(f"Downloading {len(keys)} file(s) to {local_dir}/:\n")
 
     downloaded = 0
-    for key in csv_keys:
-        # Strip prefix to get the filename
-        filename = key.rsplit("/", 1)[-1]
-        local_file = local_dir / filename
+    for key in keys:
+        # Strip the bucket prefix to get the relative path (tasks/univariate/...)
+        if client.prefix:
+            relative = key[len(client.prefix) :].lstrip("/")
+        else:
+            relative = key
+        local_file = local_dir / relative
         try:
             local_file.parent.mkdir(parents=True, exist_ok=True)
             client._client.download_file(client.bucket, key, str(local_file))
             downloaded += 1
-            print(f"  {key} -> {local_file}")
+            print(f"  {relative}")
         except Exception as e:
-            print(f"  FAILED: {key} ({e})")
+            print(f"  FAILED: {relative} ({e})")
 
-    print(f"\n{downloaded}/{len(csv_keys)} files downloaded")
+    print(f"\n{downloaded}/{len(keys)} files downloaded")
 
 
 def cmd_list(args):
-    """List benchmark data in the R2 bucket."""
+    """List task data in the R2 bucket."""
     client = create_client(args)
 
-    keys = client.list_objects("")
+    keys = client.list_objects("tasks/")
     if not keys:
-        print("No objects found")
+        print("No task data found")
         return
 
-    print(f"Benchmark data in s3://{client.bucket}/{client.prefix}/:\n")
+    print(f"Task data in s3://{client.bucket}/{client.prefix}/tasks/:\n")
     for key in keys:
-        print(f"  {key}")
+        # Show just the relative path
+        if client.prefix:
+            relative = key[len(client.prefix) :].lstrip("/")
+        else:
+            relative = key
+        print(f"  {relative}")
     print(f"\n{len(keys)} objects total")
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Upload/download TempusBench benchmark results to/from R2",
+        description="Upload/download TempusBench task datasets to/from R2",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
@@ -208,18 +198,17 @@ def main():
 
     # upload
     upload_parser = subparsers.add_parser(
-        "upload", help="Upload benchmark evals to R2"
+        "upload", help="Upload task datasets to R2"
     )
     upload_parser.add_argument(
-        "path",
-        nargs="?",
+        "--filter",
         default="",
-        help="Run directory or CSV file (default: latest run)",
+        help="Sub-path filter, e.g. 'multivariate' or 'univariate/absent_binary_univariate'",
     )
 
     # download
     download_parser = subparsers.add_parser(
-        "download", help="Download benchmark data from R2"
+        "download", help="Download task datasets from R2"
     )
     download_parser.add_argument(
         "local_dir",
@@ -229,7 +218,7 @@ def main():
     )
 
     # list
-    subparsers.add_parser("list", help="List benchmark data in R2")
+    subparsers.add_parser("list", help="List task data in R2")
 
     args = parser.parse_args()
 

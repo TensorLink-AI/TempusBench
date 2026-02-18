@@ -15,14 +15,13 @@ class ResultsGenerator:
     Class to generate pivot tables from evaluations CSV and compute aggregations.
 
     Automatically detects all subclasses of BaseAggregator and initializes them
-    for computing aggregation scores. Optionally uploads results to R2 storage.
+    for computing aggregation scores.
     """
 
     def __init__(
         self,
         pivot_tables: Optional[Dict[str, pd.DataFrame]] = None,
         baseline_model: str = "seasonal_naive",
-        r2_client=None,
     ):
         """
         Initialize the ResultsGenerator.
@@ -32,12 +31,10 @@ class ResultsGenerator:
                          Each pivot table has models as index, tasks as columns, scores as values.
                          If None, must be set later using set_pivot_tables.
             baseline_model: Name of the baseline model for aggregators that need it (default: seasonal_naive)
-            r2_client: Optional R2StorageClient for uploading results to cloud storage.
         """
         self.baseline_model = baseline_model
         self.aggregator_classes: List[type] = []
         self.pivot_tables: Dict[str, pd.DataFrame] = {}
-        self.r2_client = r2_client
 
         # Detect aggregator classes
         self.aggregator_classes = self._get_aggregator_subclasses()
@@ -208,7 +205,7 @@ class ResultsGenerator:
 
     def save_pivot_tables(self, output_dir: str):
         """
-        Save all pivot tables to CSV files and optionally upload to R2.
+        Save all pivot tables to CSV files.
 
         Args:
             output_dir: Directory to save pivot tables
@@ -223,12 +220,6 @@ class ResultsGenerator:
             file_path = output_path / f"{metric_name}_pivot.csv"
             pivot_table.to_csv(file_path)
             print(f"Saved pivot table for {metric_name} to {file_path}")
-
-            if self.r2_client is not None:
-                self.r2_client.upload_file(
-                    str(file_path),
-                    f"{metric_name}_pivot.csv",
-                )
 
     def save_aggregations(self, output_dir: str):
         """
@@ -258,12 +249,6 @@ class ResultsGenerator:
                 print(
                     f"Saved {aggregator_name} results for {metric_name} to {file_path}"
                 )
-
-                if self.r2_client is not None:
-                    self.r2_client.upload_file(
-                        str(file_path),
-                        file_name,
-                    )
 
 
 def main():

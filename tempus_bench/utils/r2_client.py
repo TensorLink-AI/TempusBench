@@ -1,8 +1,9 @@
 """
-R2 (S3-compatible) storage client for uploading benchmark results to Cloudflare R2.
+R2 (S3-compatible) storage client for Cloudflare R2.
 
-This module provides the R2StorageClient class which handles uploading benchmark
-evaluation CSVs to a Cloudflare R2 bucket using the S3-compatible API via boto3.
+This module provides the R2StorageClient class which handles uploading and
+downloading files to/from a Cloudflare R2 bucket using the S3-compatible API
+via boto3.
 
 When R2 is not configured or disabled, all operations are no-ops.
 """
@@ -17,22 +18,17 @@ logger = logging.getLogger(__name__)
 
 class R2StorageClient:
     """
-    Client for uploading benchmark results to Cloudflare R2 (S3-compatible storage).
+    Client for Cloudflare R2 (S3-compatible storage).
 
-    Uploads benchmark evaluation CSVs (evaluations.csv, pivot tables, aggregations)
-    to a flat key structure under a configurable prefix:
-
-        {prefix}/evaluations.csv
-        {prefix}/avg_test_mae_pivot.csv
-        {prefix}/avg_test_mae_winrate.csv
-        ...
+    Used by ``scripts/r2_sync.py`` to upload/download the benchmark task
+    datasets (time-series CSVs and task.yaml configs).
 
     When disabled (r2_enabled=False or missing credentials), all methods are silent no-ops.
 
     Attributes:
-        enabled (bool): Whether R2 uploads are active.
+        enabled (bool): Whether R2 operations are active.
         bucket (str): R2 bucket name.
-        prefix (str): Key prefix for all uploaded objects.
+        prefix (str): Key prefix for all objects.
     """
 
     def __init__(
@@ -156,23 +152,6 @@ class R2StorageClient:
         except Exception as e:
             logger.warning(f"Failed to upload {local_path} to R2: {e}")
             return False
-
-    def stream_file(self, local_path: str, r2_key: str) -> bool:
-        """
-        Stream (re-upload) a file to R2.
-
-        This is used for files that are appended to incrementally (e.g., evaluations.csv).
-        Since R2/S3 doesn't support append operations, we re-upload the entire file
-        on each call. This gives consumers near-real-time access to results.
-
-        Args:
-            local_path: Absolute path to the local file.
-            r2_key: Relative key within the prefix.
-
-        Returns:
-            True if upload succeeded, False otherwise.
-        """
-        return self.upload_file(local_path, r2_key)
 
     def download_file(self, r2_key: str, local_path: str) -> bool:
         """
