@@ -15,13 +15,15 @@ class ResultsGenerator:
     Class to generate pivot tables from evaluations CSV and compute aggregations.
 
     Automatically detects all subclasses of BaseAggregator and initializes them
-    for computing aggregation scores.
+    for computing aggregation scores. Optionally uploads results to R2 storage.
     """
 
     def __init__(
         self,
         pivot_tables: Optional[Dict[str, pd.DataFrame]] = None,
         baseline_model: str = "seasonal_naive",
+        r2_client=None,
+        r2_run_name: str = "",
     ):
         """
         Initialize the ResultsGenerator.
@@ -31,10 +33,14 @@ class ResultsGenerator:
                          Each pivot table has models as index, tasks as columns, scores as values.
                          If None, must be set later using set_pivot_tables.
             baseline_model: Name of the baseline model for aggregators that need it (default: seasonal_naive)
+            r2_client: Optional R2StorageClient for uploading results to cloud storage.
+            r2_run_name: Run directory name for R2 key prefixing (e.g., "run_20240101-120000").
         """
         self.baseline_model = baseline_model
         self.aggregator_classes: List[type] = []
         self.pivot_tables: Dict[str, pd.DataFrame] = {}
+        self.r2_client = r2_client
+        self.r2_run_name = r2_run_name
 
         # Detect aggregator classes
         self.aggregator_classes = self._get_aggregator_subclasses()
@@ -205,7 +211,7 @@ class ResultsGenerator:
 
     def save_pivot_tables(self, output_dir: str):
         """
-        Save all pivot tables to CSV files.
+        Save all pivot tables to CSV files and optionally upload to R2.
 
         Args:
             output_dir: Directory to save pivot tables
@@ -220,6 +226,12 @@ class ResultsGenerator:
             file_path = output_path / f"{metric_name}_pivot.csv"
             pivot_table.to_csv(file_path)
             print(f"Saved pivot table for {metric_name} to {file_path}")
+
+            if self.r2_client is not None and self.r2_run_name:
+                self.r2_client.upload_file(
+                    str(file_path),
+                    f"{self.r2_run_name}/evals/{metric_name}_pivot.csv",
+                )
 
     def save_aggregations(self, output_dir: str):
         """
@@ -240,7 +252,8 @@ class ResultsGenerator:
         # Save each aggregator's results for each metric
         for metric_name, metric_aggregations in aggregations.items():
             for aggregator_name, series in metric_aggregations.items():
-                file_path = output_path / f"{metric_name}_{aggregator_name.lower()}.csv"
+                file_name = f"{metric_name}_{aggregator_name.lower()}.csv"
+                file_path = output_path / file_name
                 # Convert Series to DataFrame for easier saving
                 df = series.to_frame()
                 df.index.name = "model_name"
@@ -248,6 +261,12 @@ class ResultsGenerator:
                 print(
                     f"Saved {aggregator_name} results for {metric_name} to {file_path}"
                 )
+
+                if self.r2_client is not None and self.r2_run_name:
+                    self.r2_client.upload_file(
+                        str(file_path),
+                        f"{self.r2_run_name}/evals/{file_name}",
+                    )
 
 
 def main():

@@ -294,6 +294,13 @@ class HyperparameterTuner:
                 )
             writer.writerow(formatted_row)
 
+        # Stream updated evaluations.csv to R2 after each model-task result
+        if self.job_config.r2_client is not None:
+            run_name = Path(self.job_config.run_path).name
+            self.job_config.r2_client.stream_file(
+                str(csv_outpath), f"{run_name}/evals/{csv_filename}"
+            )
+
         # Store results for this dataset
         model_evals = {}
         model_best_params = {}
