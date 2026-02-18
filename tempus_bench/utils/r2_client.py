@@ -1,9 +1,8 @@
 """
-R2 (S3-compatible) storage client for streaming benchmark results to Cloudflare R2.
+R2 (S3-compatible) storage client for uploading benchmark results to Cloudflare R2.
 
 This module provides the R2StorageClient class which handles uploading benchmark
-artifacts (CSVs, logs, TensorBoard events) to a Cloudflare R2 bucket using the
-S3-compatible API via boto3.
+evaluation CSVs to a Cloudflare R2 bucket using the S3-compatible API via boto3.
 
 When R2 is not configured or disabled, all operations are no-ops.
 """
@@ -20,10 +19,13 @@ class R2StorageClient:
     """
     Client for uploading benchmark results to Cloudflare R2 (S3-compatible storage).
 
-    Supports two usage patterns:
-    - **Streaming**: Upload a file after each append (e.g., evaluations.csv after each
-      model-task result). R2 doesn't support append, so this overwrites the object.
-    - **Batch upload**: Upload an entire directory of artifacts at run completion.
+    Uploads benchmark evaluation CSVs (evaluations.csv, pivot tables, aggregations)
+    to a flat key structure under a configurable prefix:
+
+        {prefix}/evaluations.csv
+        {prefix}/avg_test_mae_pivot.csv
+        {prefix}/avg_test_mae_winrate.csv
+        ...
 
     When disabled (r2_enabled=False or missing credentials), all methods are silent no-ops.
 
@@ -154,39 +156,6 @@ class R2StorageClient:
         except Exception as e:
             logger.warning(f"Failed to upload {local_path} to R2: {e}")
             return False
-
-    def upload_directory(self, local_dir: str, r2_key_prefix: str) -> int:
-        """
-        Upload all files in a local directory to R2, preserving directory structure.
-
-        Args:
-            local_dir: Absolute path to the local directory.
-            r2_key_prefix: Prefix for all keys (e.g., "run_20240101").
-
-        Returns:
-            Number of files successfully uploaded.
-        """
-        if not self.enabled or self._client is None:
-            return 0
-
-        local_dir_path = Path(local_dir)
-        if not local_dir_path.is_dir():
-            logger.warning(f"Directory not found: {local_dir}")
-            return 0
-
-        uploaded = 0
-        for file_path in local_dir_path.rglob("*"):
-            if not file_path.is_file():
-                continue
-            relative = file_path.relative_to(local_dir_path)
-            r2_key = f"{r2_key_prefix}/{relative}"
-            if self.upload_file(str(file_path), r2_key):
-                uploaded += 1
-
-        logger.info(
-            f"Uploaded {uploaded} files from {local_dir} to R2 prefix {r2_key_prefix}"
-        )
-        return uploaded
 
     def stream_file(self, local_path: str, r2_key: str) -> bool:
         """

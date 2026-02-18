@@ -23,7 +23,6 @@ class ResultsGenerator:
         pivot_tables: Optional[Dict[str, pd.DataFrame]] = None,
         baseline_model: str = "seasonal_naive",
         r2_client=None,
-        r2_run_name: str = "",
     ):
         """
         Initialize the ResultsGenerator.
@@ -34,13 +33,11 @@ class ResultsGenerator:
                          If None, must be set later using set_pivot_tables.
             baseline_model: Name of the baseline model for aggregators that need it (default: seasonal_naive)
             r2_client: Optional R2StorageClient for uploading results to cloud storage.
-            r2_run_name: Run directory name for R2 key prefixing (e.g., "run_20240101-120000").
         """
         self.baseline_model = baseline_model
         self.aggregator_classes: List[type] = []
         self.pivot_tables: Dict[str, pd.DataFrame] = {}
         self.r2_client = r2_client
-        self.r2_run_name = r2_run_name
 
         # Detect aggregator classes
         self.aggregator_classes = self._get_aggregator_subclasses()
@@ -227,10 +224,10 @@ class ResultsGenerator:
             pivot_table.to_csv(file_path)
             print(f"Saved pivot table for {metric_name} to {file_path}")
 
-            if self.r2_client is not None and self.r2_run_name:
+            if self.r2_client is not None:
                 self.r2_client.upload_file(
                     str(file_path),
-                    f"{self.r2_run_name}/evals/{metric_name}_pivot.csv",
+                    f"{metric_name}_pivot.csv",
                 )
 
     def save_aggregations(self, output_dir: str):
@@ -262,10 +259,10 @@ class ResultsGenerator:
                     f"Saved {aggregator_name} results for {metric_name} to {file_path}"
                 )
 
-                if self.r2_client is not None and self.r2_run_name:
+                if self.r2_client is not None:
                     self.r2_client.upload_file(
                         str(file_path),
-                        f"{self.r2_run_name}/evals/{file_name}",
+                        file_name,
                     )
 
 

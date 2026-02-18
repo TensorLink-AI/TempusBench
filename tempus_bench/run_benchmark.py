@@ -118,30 +118,16 @@ class BenchmarkRunner:
         evals_dir = Path(self.manager.run_path) / "evals"
         csv_path = evals_dir / "evaluations.csv"
         if csv_path.exists():
-            run_name = Path(self.manager.run_path).name
             pivot_tables = ResultsGenerator.create_pivot_tables(str(csv_path))
             generator = ResultsGenerator(
                 pivot_tables=pivot_tables,
                 r2_client=self.manager.r2_client,
-                r2_run_name=run_name,
             )
             generator.save_pivot_tables(str(evals_dir))
             generator.save_aggregations(str(evals_dir))
             self.logger.success(
                 "BenchmarkRunner",
                 "Pivot tables and aggregations generated",
-            )
-
-        # Upload final run directory to R2
-        r2_client = self.manager.r2_client
-        if r2_client is not None and r2_client.enabled:
-            run_name = Path(self.manager.run_path).name
-            uploaded = r2_client.upload_directory(
-                str(self.manager.run_path), run_name
-            )
-            self.logger.success(
-                "BenchmarkRunner",
-                f"Uploaded {uploaded} files to R2 under prefix {run_name}",
             )
 
         # Close logger
