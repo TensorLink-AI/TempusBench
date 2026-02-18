@@ -240,7 +240,8 @@ class ResultsGenerator:
         # Save each aggregator's results for each metric
         for metric_name, metric_aggregations in aggregations.items():
             for aggregator_name, series in metric_aggregations.items():
-                file_path = output_path / f"{metric_name}_{aggregator_name.lower()}.csv"
+                file_name = f"{metric_name}_{aggregator_name.lower()}.csv"
+                file_path = output_path / file_name
                 # Convert Series to DataFrame for easier saving
                 df = series.to_frame()
                 df.index.name = "model_name"

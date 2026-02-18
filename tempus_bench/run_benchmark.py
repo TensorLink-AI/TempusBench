@@ -17,6 +17,7 @@ from tempus_bench.utils.config_manager import ConfigManager
 from tempus_bench.pipeline.hyperparameter_tuner import HyperparameterTuner
 from tempus_bench.utils.paths import get_project_root
 from tempus_bench.pipeline.data_loader import DataLoader
+from tempus_bench.pipeline.results_generator import ResultsGenerator
 
 
 class BenchmarkRunner:
@@ -111,6 +112,19 @@ class BenchmarkRunner:
             self.logger.success(
                 "BenchmarkRunner",
                 f"Final Model Evaluation Executed for task: {job_config.task_config.task_name}",
+            )
+
+        # Generate pivot tables and aggregations from evaluations CSV
+        evals_dir = Path(self.manager.run_path) / "evals"
+        csv_path = evals_dir / "evaluations.csv"
+        if csv_path.exists():
+            pivot_tables = ResultsGenerator.create_pivot_tables(str(csv_path))
+            generator = ResultsGenerator(pivot_tables=pivot_tables)
+            generator.save_pivot_tables(str(evals_dir))
+            generator.save_aggregations(str(evals_dir))
+            self.logger.success(
+                "BenchmarkRunner",
+                "Pivot tables and aggregations generated",
             )
 
         # Close logger

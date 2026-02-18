@@ -196,7 +196,7 @@ class EvaluationSetting(BaseModel):
     """
     System-wide evaluation settings configuration.
 
-    This class defines global settings for logging, TensorBoard, and conda
+    This class defines global settings for logging, TensorBoard, conda
     environment management across all models and tasks.
 
     Attributes:
@@ -244,7 +244,6 @@ class JobConfig:
             device, conda environment).
         task_config (TaskConfig): Task-specific configuration including dataset settings.
         run_path (str): Path to run directory for outputs.
-        logger (LoggerManager): Logger instance for this job.
     """
 
     def __init__(
